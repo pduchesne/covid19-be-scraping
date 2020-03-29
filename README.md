@@ -8,7 +8,7 @@ Data extracts will be performed regularly, and committed in this source tree, in
 
 ## The data
 
-Currently this code only extracts the whole history of daily cases per province.
+Currently this code extracts the whole history of daily cases per province, age and gender.
 
 ## Running extracts
 

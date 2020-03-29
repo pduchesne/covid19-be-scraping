@@ -9,7 +9,8 @@ const XSRF_TOKEN = "<YOUR XSRF TOKEN HERE>";
 const DS_REPORTS_COMPONENTS = {
     "province" : "cd-ekde89p46b",
     "gender" : "cd-lu4je9p46b",
-    "age" : "cd-97aeueq46b"
+    "age" : "cd-97aeueq46b",
+    "totalCases" : "cd-vxmmq3q46b"
 }
 
 const DS_FIELDS = {
@@ -44,7 +45,7 @@ const createDataStudioRequest = function(requests) {
 
 
 /**
- * Create a Province Daily Cases request
+ * Create a Daily Cases request for a given field
  * @param date
  */
 const createFieldRequest = function(fromDate, toDate, field)
@@ -123,7 +124,7 @@ const processRequest = function(request) {
                 if (rawText.startsWith(")]}',")) {
                     rawText = rawText.substring(5);
                 } else if (rawText.startsWith(")]}")) {
-                    rawText = rawText.substring(5);
+                    rawText = rawText.substring(3);
                 }
 
                 return JSON.parse(rawText);
@@ -165,19 +166,19 @@ const formatDate = function(date) {
 }
 
 /**
- * Returns daily cases per province for a given day, in the form {timestamp: <date>, [<province_name> : <count>]* }
+ * Returns daily cases per 'field'' for a given day, in the form {timestamp: <date>, [<field_value> : <count>]* }
  * @param fromDate
  * @param toDate
  * @return {PromiseLike<any> | Promise<any>}
  */
 const retrieveDataForDate = function(field, date) {
 
-    console.log('Retrieving province daily cases for '+field+' on '+date);
+    console.log('Retrieving daily cases for '+field+' on '+date);
 
     // retrieve data on single day
-    const provinceRequest = createFieldRequest(date, date, field);
+    const dataRequest = createFieldRequest(date, date, field);
 
-    const request = createDataStudioRequest([provinceRequest]);
+    const request = createDataStudioRequest([dataRequest]);
 
     //console.log(JSON.stringify(request, undefined, 4));
     return processRequest(request)
@@ -189,34 +190,34 @@ const retrieveDataForDate = function(field, date) {
                 return result;
             }
 
-            const provinceNames = results.tableDataset.column[0].stringColumn.values;
+            const dataFieldNames = results.tableDataset.column[0].stringColumn.values;
             const values = results.tableDataset.column[1].longColumn.values;
 
-            provinceNames.forEach( (name, idx) => result[name] = values[idx] )
+            dataFieldNames.forEach( (name, idx) => result[name] = values[idx] )
 
             return result;
         })
 }
 
 /**
- * Returns whole history of daily cases per province in the form {timestamp: <date>, [<province_name> : <count>]* }
+ * Returns whole history of daily cases per 'field'' in the form {timestamp: <date>, [<field_value> : <count>]* }
  * @return {PromiseLike<any> | Promise<any>}
  */
 const retrieveFullHistory = async function(field) {
-    const provinceHistory = [];
+    const history = [];
 
     var now = new Date();
     for (var d = new Date("2020-02-08"); d <= now; d.setDate(d.getDate() + 1)) {
         await retrieveDataForDate(field, d).then(
-            data => provinceHistory.push(data)
+            data => history.push(data)
         )
     }
 
-    return provinceHistory;
+    return history;
 }
 
 const produceCsvForField = function(field) {
-    // Retrieve whole province daily cases history and dump it into a csv file
+    // Retrieve whole  daily cases history and dump it into a csv file
     retrieveFullHistory(field).then(history => {
         const fieldNames = {};
         // browse through all records to fetch all column names - quick & dirty

@@ -4,6 +4,22 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const COOKIE = "<YOUR COOKIE HERE>";
 const XSRF_TOKEN = "<YOUR XSRF TOKEN HERE>";
 
+
+// list of "report components" that expose fields below
+const DS_REPORTS_COMPONENTS = {
+    "province" : "cd-ekde89p46b",
+    "gender" : "cd-lu4je9p46b",
+    "age" : "cd-97aeueq46b"
+}
+
+const DS_FIELDS = {
+    "cases" : "datastudio_record_count_system_field_id_98323387",
+    "timestamp" : "_n173995999_",
+    "province" : "_n987485392_",
+    "gender" : "_n1249512767_",
+    "age" : "calc_nfwpvhq46b"
+}
+
 // The DataStudio API endpoint
 const URL = "https://datastudio.google.com/u/0/batchedDataV2?appVersion=20200325_00020000";
 
@@ -31,7 +47,7 @@ const createDataStudioRequest = function(requests) {
  * Create a Province Daily Cases request
  * @param date
  */
-const createProvinceRequest = function(date)
+const createFieldRequest = function(fromDate, toDate, field)
 {
     return {
       "requestContext": {
@@ -39,7 +55,7 @@ const createProvinceRequest = function(date)
           "reportId": "c14a5cfc-cab7-4812-848c-0369173148ab",
           "pageId": "17170155",
           "mode": "VIEW",
-          "componentId": "cd-ekde89p46b"
+          "componentId": DS_REPORTS_COMPONENTS[field]
         }
       },
       "datasetSpec": {
@@ -51,77 +67,29 @@ const createProvinceRequest = function(date)
         ],
         "queryFields": [
           {
-            "name": "qt_zh8gbaq46b",
+            "name": "field1",
             "datasetNs": "d0",
             "tableNs": "t0",
             "dataTransformation": {
-              "sourceFieldName": "_n987485392_"
+              "sourceFieldName": DS_FIELDS[field]
             }
           },
           {
-            "name": "qt_1icd89p46b",
+            "name": "field2",
             "datasetNs": "d0",
             "tableNs": "t0",
             "dataTransformation": {
-              "sourceFieldName": "datastudio_record_count_system_field_id_98323387"
+              "sourceFieldName": DS_FIELDS["cases"]
             }
           }
         ],
-        "sortData": [
-          {
-            "sortColumn": {
-              "name": "qt_1icd89p46b",
-              "datasetNs": "d0",
-              "tableNs": "t0",
-              "dataTransformation": {
-                "sourceFieldName": "datastudio_record_count_system_field_id_98323387"
-              }
-            },
-            "sortDir": 1
-          }
-        ],
         "includeRowsCount": true,
-
-        "blendConfig": {
-          "blockDatasource": {
-            "datasourceBlock": {
-              "id": "block_qk4n5k946b",
-              "type": 1,
-              "inputBlockIds": [],
-              "outputBlockIds": [],
-              "fields": []
-            },
-            "blocks": [
-              {
-                "id": "block_rk4n5k946b",
-                "type": 5,
-                "inputBlockIds": [],
-                "outputBlockIds": [],
-                "fields": [],
-                "queryBlockConfig": {
-                  "joinQueryConfig": {
-                    "joinKeys": [],
-                    "queries": [
-                      {
-                        "datasourceId": "41efbf00-b938-4f99-80a8-da1f1cc87a36",
-                        "concepts": []
-                      }
-                    ]
-                  }
-                }
-              }
-            ],
-            "delegatedAccessEnabled": true,
-            "isUnlocked": true,
-            "isCacheable": false
-          }
-        },
         "filters": [],
         "features": [],
         "dateRanges": [
           {
-            "startDate": formatDate(date),
-            "endDate": formatDate(date),
+            "startDate": formatDate(fromDate),
+            "endDate": formatDate(toDate),
             "dataSubsetNs": {
               "datasetNs": "d0",
               "tableNs": "t0",
@@ -136,7 +104,7 @@ const createProvinceRequest = function(date)
             "datasetNs": "d0",
             "tableNs": "t0",
             "dataTransformation": {
-              "sourceFieldName": "_n173995999_"
+              "sourceFieldName": DS_FIELDS['timestamp']
             }
           }
         ],
@@ -175,7 +143,10 @@ const processRequest = function(request) {
                 throw "Unexpected response : "+JSON.stringify(jsonObj)
             }
         }
-    )
+    ).catch(err => {
+        console.warn("Failed request : "+JSON.stringify(request, undefined, 4));
+        throw err;
+    })
 }
 
 /**
@@ -199,11 +170,12 @@ const formatDate = function(date) {
  * @param toDate
  * @return {PromiseLike<any> | Promise<any>}
  */
-const retrieveProvinceDataForDate = function(date) {
+const retrieveDataForDate = function(field, date) {
 
-    console.log('Retrieving province daily cases for '+date);
+    console.log('Retrieving province daily cases for '+field+' on '+date);
 
-    const provinceRequest = createProvinceRequest(date);
+    // retrieve data on single day
+    const provinceRequest = createFieldRequest(date, date, field);
 
     const request = createDataStudioRequest([provinceRequest]);
 
@@ -230,12 +202,12 @@ const retrieveProvinceDataForDate = function(date) {
  * Returns whole history of daily cases per province in the form {timestamp: <date>, [<province_name> : <count>]* }
  * @return {PromiseLike<any> | Promise<any>}
  */
-const retrieveFullProvinceHistory = async function() {
+const retrieveFullHistory = async function(field) {
     const provinceHistory = [];
 
     var now = new Date();
-    for (var d = new Date("2020-02-8"); d <= now; d.setDate(d.getDate() + 1)) {
-        await retrieveProvinceDataForDate(d).then(
+    for (var d = new Date("2020-02-08"); d <= now; d.setDate(d.getDate() + 1)) {
+        await retrieveDataForDate(field, d).then(
             data => provinceHistory.push(data)
         )
     }
@@ -243,24 +215,30 @@ const retrieveFullProvinceHistory = async function() {
     return provinceHistory;
 }
 
+const produceCsvForField = function(field) {
+    // Retrieve whole province daily cases history and dump it into a csv file
+    retrieveFullHistory(field).then(history => {
+        const fieldNames = {};
+        // browse through all records to fetch all column names - quick & dirty
+        history.forEach(record => Object.keys(record).forEach(fieldName => fieldNames[fieldName] = fieldName))
 
-// Retrieve whole province daily cases history and dump it into a csv file
-retrieveFullProvinceHistory().then(history => {
-    const fieldNames = {};
-    // browse through all records to fetch all column names - quick & dirty
-    history.forEach(record => Object.keys(record).forEach(fieldName => fieldNames[fieldName] = fieldName))
+        const csvHeaders = Object.keys(fieldNames).map(name => ({id: name, title:name}) );
 
-    const csvHeaders = Object.keys(fieldNames).map(name => ({id: name, title:name}) );
-
-    const csvWriter = createCsvWriter({
-        path: 'extracts/provincesDailyCases.csv',
-        header: csvHeaders
-    });
-    csvWriter.writeRecords(history)
-        .then(() => {
-            console.log('...Done');
+        const csvWriter = createCsvWriter({
+            path: `extracts/dailyCases-${field}.csv`,
+            header: csvHeaders
         });
-})
+        csvWriter.writeRecords(history)
+            .then(() => {
+                console.log('...Done');
+            });
+    })
+}
+
+produceCsvForField("province");
+produceCsvForField("age");
+produceCsvForField("gender");
+
 
 
 

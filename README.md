@@ -1,4 +1,4 @@
-# covid-scrape
+# covid19-be-scraping
 
 This project aims at extracting COVID19 belgian data from the Sciensano data residing in Google DataStudio.
 This code is a very rough and naive attempt at interfacing with DataStudio, but the objective is data availability, 

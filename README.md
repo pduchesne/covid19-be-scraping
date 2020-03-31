@@ -1,5 +1,7 @@
 # covid19-be-scraping
 
+**Deprecated** This project is no longer of use since data is now published at https://epistat.wiv-isp.be/covid/
+
 This project aims at extracting COVID19 belgian data from the Sciensano data residing in Google DataStudio.
 This code is a very rough and naive attempt at interfacing with DataStudio, but the objective is data availability, 
 not code reusability.
